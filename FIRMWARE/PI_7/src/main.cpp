@@ -6,10 +6,10 @@
 #include <LiquidCrystal_I2C.h>
 
 //-----------------------------------------------------------------------------------------------------------   CONSTANTES
-const char *apiWriteKey = "78HR62O527P424BP"; // Digitar chave de gravação do ThingSpeak
-const char *apiReadKey = "BNZX34W2JPUZHRWO";  // Digitar chave de leitura do ThingSpeak
-const char *ssid = "FALANGE_SUPREMA";         // Coloque o nome da coneção wifi ssid
-const char *pass = "#kinecs#";                // Coloque a senha da rede wifi
+const char *apiWriteKey = "78HR62O527P424BP"; // Chave de gravação do ThingSpeak
+const char *apiReadKey = "BNZX34W2JPUZHRWO";  // Chave de leitura do ThingSpeak
+const char *ssid = "FALANGE_SUPREMA";         // Nome da rede wifi ssid
+const char *pass = "#kinecs#";                // Senha da rede wifi
 //-----------------------------------------------------------------------------------------------------------  DEFINIÇÕES
 #define SENSOR_FLUXO 27
 #define SENSOR_NIVEL_1 12
@@ -50,12 +50,52 @@ void IRAM_ATTR pulseCounter()
     pulseCount++;
 }
 
+// acionamento da bomba 1
 void BOMBA_ACIONAMENTO(boolean STATUS_BOMBA_1)
 {
     if (STATUS_BOMBA_1 != 0)
     {
+        digitalWrite(BOMBA_1, HIGH);
+        bombPower = 1;
+    }
+    else
+    {
+        digitalWrite(BOMBA_1, LOW);
+        bombPower = 0;
     }
 }
+
+// Acionamento solenoide da agua potável
+void SLOENOIDE_POTAVEL_ACIONAMENTO(boolean STATUS_SOLENOIDE_1)
+{
+    if (STATUS_SOLENOIDE_1 != 0)
+    {
+        digitalWrite(SOLENOIDE_POTAVEL, HIGH);
+        potableSolenoidStatus = 1;
+    }
+    else
+    {
+        digitalWrite(SOLENOIDE_POTAVEL, LOW);
+        potableSolenoidStatus = 0;
+    }
+}
+
+// Acionamento solenoide da agua descarte
+void SLOENOIDE_REUSO_ACIONAMENTO(boolean STATUS_SOLENOIDE_2)
+{
+    if (STATUS_SOLENOIDE_2 != 0)
+    {
+        digitalWrite(SOLENOIDE_DESCARTE, HIGH);
+        discardSolenoidStatus = 1;
+    }
+    else
+    {
+        digitalWrite(SOLENOIDE_DESCARTE, LOW);
+        discardSolenoidStatus = 0;
+    }
+}
+
+
 
 WiFiClient client;
 LiquidCrystal_I2C lcd(0x27, 20, 4); // Seta o endereço do LCD em 0x27 e configura o LCD de 20 colunas e 4 linhas
@@ -102,10 +142,10 @@ void setup()
     totalLitres = ThingSpeak.readFloatField(1753394, 3, apiReadKey);
     previousMillis = 0;
 
-    // Cria uma interrupção parta o sensor de fluxo que funciona em modo HALL
+    // Cria uma interrupção para a porta do microcontrolador para o sensor de fluxo que funciona em modo HALL
     attachInterrupt(digitalPinToInterrupt(SENSOR_FLUXO), pulseCounter, FALLING);
 }
-//------------------------------------------------------------------------------------- Loop infinito so microcontrolador
+//------------------------------------------------------------------------------------- Loop infinito do microcontrolador
 void loop()
 {
     digitalWrite(LED_STATUS, LOW);
