@@ -8,5 +8,7 @@
 			"path": "FIRMWARE\\PI_7"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "HARDWARE"
+	}
 }
