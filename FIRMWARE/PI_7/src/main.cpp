@@ -4,12 +4,15 @@
 #include <Wire.h>
 #include "ThingSpeak.h"
 #include <LiquidCrystal_I2C.h>
+#include <MCP23017.h>
 
 //-----------------------------------------------------------------------------------------------------------   CONSTANTES
 const char *apiWriteKey = "78HR62O527P424BP"; // Chave de gravação do ThingSpeak
 const char *apiReadKey = "BNZX34W2JPUZHRWO";  // Chave de leitura do ThingSpeak
-const char *ssid = "FALANGE_SUPREMA";         // Nome da rede wifi ssid
-const char *pass = "#kinecs#";                // Senha da rede wifi
+// const char *ssid = "FALANGE_SUPREMA";         // Nome da rede wifi ssid
+// const char *pass = "#kinecs#";                // Senha da rede wifi
+const char *ssid = "Hotel Exclusivo";         // Nome da rede wifi ssid
+const char *pass = "rwhe2008";                // Senha da rede wifi
 //-----------------------------------------------------------------------------------------------------------  DEFINIÇÕES
 #define SENSOR_FLUXO 27
 #define SENSOR_NIVEL_1 33
@@ -24,6 +27,9 @@ const char *pass = "#kinecs#";                // Senha da rede wifi
 #define LED_STATUS 15
 #define MCP23017_PORT_A 39
 #define MCP23017_PORT_B 36
+#define MCP_ADDRESS 0x20 // (A2/A1/A0 = LOW) configura o endereço do MCP23017 na rede I2C
+#define LCD_ADDRESS 0x38 //(A1/A2/A0 = HIGH) configura o endereço do LCD na rede I2C
+#define RESET_PIN 4
 
 //----------------------------------------------------------------------------------------------------- VARIAVEIS GLOBAIS
 long currentMillis = 0;
@@ -99,67 +105,70 @@ void SOLOENOIDE_REUSO_ACIONAMENTO(boolean STATUS_SOLENOIDE_2)
 }
 
 WiFiClient client;
-LiquidCrystal_I2C lcd(0x38, 20, 4); // Seta o endereço do LCD em 0x27 e configura o LCD de 20 colunas e 4 linhas
-//------------------------------------------------------------------------------------------------- CARREGA CONFIGURAÇÕES
-void setup()
+LiquidCrystal_I2C lcd(LCD_ADDRESS, 20, 4); // Seta o endereço do LCD em 0x27 e configura o LCD de 20 colunas e 4 linhas
+MCP23017 myMCP = MCP23017(MCP_ADDRESS);
+    //------------------------------------------------------------------------------------------------- CARREGA CONFIGURAÇÕES
+    void
+    setup()
 {
     Serial.begin(9600);       // Inicia a comunicação serial
     WiFi.mode(WIFI_STA);      // Coloca o WIFI do ESP32 em modo estação
     ThingSpeak.begin(client); // Inicializa a comunicação com o ThingSpeak
     lcd.init();               // Incializa o LCD
     lcd.backlight();          // Seta a Iluminação do LCD
-                              /*
-                                  lcd.clear();
-                                  lcd.setCursor(0, 0);
-                                  lcd.print("      UNIVESP       ");
-                                  lcd.setCursor(0, 1);
-                                  lcd.print(" PROJETO INTEGRADOR ");
-                                  lcd.setCursor(0, 2);
-                                  lcd.print("   REUSO DA AGUA    ");
-                                  lcd.setCursor(0, 3);
-                                  lcd.print("    GRUPO: 4N88     ");
-                                  delay(5000);
-                                  lcd.clear();
-                                  lcd.setCursor(0, 0);
-                                  lcd.print("     INTEGRANTES    ");
-                                  delay(3000);
-                                  lcd.clear();
-                                  lcd.setCursor(0, 0);
-                                  lcd.print("ANDRE LUIZ PRADO DOS SANTOS, 1822375");
-                                  delay(3000);
-                                  lcd.clear();
-                                  lcd.setCursor(0, 0);
-                                  lcd.print("DIEGO ALVES DOS SANTOS, 1831936");
-                                  delay(3000);
-                                  lcd.clear();
-                                  lcd.setCursor(0, 0);
-                                  lcd.print("ELTON SOLIGUETO, 1836172");
-                                  delay(3000);
-                                  lcd.clear();
-                                  lcd.setCursor(0, 0);
-                                  lcd.print("LILIAN ADRIANA GONZALEZ TENORIO, 1835883");
-                                  delay(3000);
-                                  lcd.clear();
-                                  lcd.setCursor(0, 0);
-                                  lcd.print("RODRIGO DE AVILA OLIVEIRA, 1826340");
-                                  delay(3000);
-                                  lcd.clear();
-                                  lcd.setCursor(0, 0);
-                                  lcd.print("SERGIO LUIZ BARBOSA, 1826279");
-                                  delay(3000);
-                                  lcd.clear();
-                                  lcd.setCursor(0, 0);
-                                  lcd.print("VICTOR MAKTURA, 1827787");
-                                  delay(3000);
-                                  lcd.clear();
-                                  lcd.setCursor(0, 0);
-                                  lcd.print("ORIENTADORA: THAIS PEREIRA DA SILVA");
-                                  delay(5000);
-                                  lcd.clear();
-                              */
-    /* Faz a verificação se tem conectividade wifi caso tenha passa a frente caso não faz a conexão com a rede
-     WIFI pré estabelecida na cosntante ssid e pass.*/
-    if (WiFi.status() != WL_CONNECTED)
+    myMCP.Init();
+        /*
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("      UNIVESP       ");
+            lcd.setCursor(0, 1);
+            lcd.print(" PROJETO INTEGRADOR ");
+            lcd.setCursor(0, 2);
+            lcd.print("   REUSO DA AGUA    ");
+            lcd.setCursor(0, 3);
+            lcd.print("    GRUPO: 4N88     ");
+            delay(5000);
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("     INTEGRANTES    ");
+            delay(3000);
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("ANDRE LUIZ PRADO DOS SANTOS, 1822375");
+            delay(3000);
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("DIEGO ALVES DOS SANTOS, 1831936");
+            delay(3000);
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("ELTON SOLIGUETO, 1836172");
+            delay(3000);
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("LILIAN ADRIANA GONZALEZ TENORIO, 1835883");
+            delay(3000);
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("RODRIGO DE AVILA OLIVEIRA, 1826340");
+            delay(3000);
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("SERGIO LUIZ BARBOSA, 1826279");
+            delay(3000);
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("VICTOR MAKTURA, 1827787");
+            delay(3000);
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("ORIENTADORA: THAIS PEREIRA DA SILVA");
+            delay(5000);
+            lcd.clear();
+        */
+        /* Faz a verificação se tem conectividade wifi caso tenha passa a frente caso não faz a conexão com a rede
+         WIFI pré estabelecida na cosntante ssid e pass.*/
+        if (WiFi.status() != WL_CONNECTED)
     {
         lcd.clear();
         lcd.print("AGUARDE CONECTANDO...");
@@ -175,17 +184,23 @@ void setup()
     }
     // configurar as portas do microcontrolador como entradas de nivel alto
     pinMode(SENSOR_FLUXO, INPUT_PULLUP);   // Seta o comportamento da porta do microcontrolador
-    pinMode(SENSOR_NIVEL_1, INPUT_PULLUP); // Seta a porta 12 do microcontrolador para sensor nivel 1 como entrada
-    pinMode(SENSOR_NIVEL_2, INPUT_PULLUP); // Seta a porta 13 do microcontrolador para sensor nivel 1 como entrada
-    pinMode(SENSOR_NIVEL_3, INPUT_PULLUP); // Seta a porta 14 do microcontrolador para sensor nivel 1 como entrada
-    pinMode(SENSOR_NIVEL_4, INPUT_PULLUP); // Seta a porta 25 do microcontrolador para sensor nivel 1 como entrada
-    pinMode(SENSOR_NIVEL_5, INPUT_PULLUP); // Seta a porta 26 do microcontrolador para sensor nivel 1 como entrada
+    pinMode(SENSOR_NIVEL_1, INPUT_PULLUP); // Seta a porta 33 do microcontrolador para sensor nivel 1 como entrada
+    pinMode(SENSOR_NIVEL_2, INPUT_PULLUP); // Seta a porta 26 do microcontrolador para sensor nivel 2 como entrada
+    pinMode(SENSOR_NIVEL_3, INPUT_PULLUP); // Seta a porta 25 do microcontrolador para sensor nivel 3 como entrada
+    pinMode(SENSOR_NIVEL_4, INPUT_PULLUP); // Seta a porta 14 do microcontrolador para sensor nivel 4 como entrada
+    pinMode(SENSOR_NIVEL_5, INPUT_PULLUP); // Seta a porta 13 do microcontrolador para sensor nivel 5 como entrada
+    pinMode(SENSOR_NIVEL_6, INPUT_PULLUP); // Seta a porta 12 do microcontrolador para sensor nivel 6 como entrada
 
     // configurar as portas do microcontrolador como saidas
-    pinMode(LED_STATUS, OUTPUT);         // Seta a porta 2 do microcontrolador para led de status como saida
-    pinMode(SOLENOIDE_POTAVEL, OUTPUT);  // Seta a porta 34 do microcontrolador para solenoide potavel como saida
-    pinMode(SOLENOIDE_DESCARTE, OUTPUT); // Seta a porta 35 do microcontrolador para solenoide descarte como saida
+    pinMode(LED_STATUS, OUTPUT);         // Seta a porta 15 do microcontrolador para led de status como saida
+    pinMode(SOLENOIDE_POTAVEL, OUTPUT);  // Seta a porta 35 do microcontrolador para solenoide potavel como saida
+    pinMode(SOLENOIDE_DESCARTE, OUTPUT); // Seta a porta 34 do microcontrolador para solenoide descarte como saida
     pinMode(BOMBA_1, OUTPUT);            // Seta a porta 32 do microcontrolador para bomba como saida
+    //Configura as portas do MCP23017
+    myMCP.setAllPins(A, OFF);         // Porta A: todos pinos em LOW
+    myMCP.setAllPins(B, OFF);         // Porta B: todos pinos em LOW
+    myMCP.setPortMode(0b11111111, A); // Porta A: todos pinos como OUTPUT
+    myMCP.setPortMode(0b11110000, B); // Porta B: B0 - B3 pinos como OUTPUT, B4-B7 pinos como INPUT
 
     pulseCount = 0;
     flowRate = 0;
@@ -284,6 +299,7 @@ void loop()
         if (levelSensor_1 == 1 && levelSensor_2 == 1 && levelSensor_3 == 1)
         {
             reservoirLevel = 100;
+            BOMBA_ACIONAMENTO(1);
         }
         else
         {
@@ -296,6 +312,11 @@ void loop()
                 if (levelSensor_1 == 1 && levelSensor_2 == 0 && levelSensor_3 == 0)
                 {
                     reservoirLevel = 10;
+
+                }
+                if(levelSensor_1 == 0 && levelSensor_2 == 0 && levelSensor_3 == 0)
+                {
+                    BOMBA_ACIONAMENTO(0);
                 }
                 else
                 {
@@ -408,7 +429,7 @@ void loop()
         lcd.setCursor(18, 3);
         lcd.print("|");
 
-        if (totalMilliLitres > tempflowMilliLitres)
+        if (float(flowRate) > 0)
         {
             // Carrega as informações para serem enviadas em um lote somente para o servidor
             ThingSpeak.setField(1, float(flowRate));         // Fluxo corrente
