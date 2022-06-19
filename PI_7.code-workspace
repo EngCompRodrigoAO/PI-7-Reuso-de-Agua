@@ -6,6 +6,9 @@
 		{
 			"name": "PI_7",
 			"path": "FIRMWARE\\PI_7"
+		},
+		{
+			"path": "..\\..\\..\\PROJETOS\\MEDIDOR DE CORRENTE"
 		}
 	],
 	"settings": {
