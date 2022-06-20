@@ -7,14 +7,16 @@
 #include <MCP23017.h>
 #include <ArduinoUniqueID.h>
 #include <arduino.h>
+#include <time.h>
 
 //-----------------------------------------------------------------------------------------------------------   CONSTANTES
-const char *apiWriteKey = "78HR62O527P424BP"; // Chave de gravação do ThingSpeak
-const char *apiReadKey = "BNZX34W2JPUZHRWO";  // Chave de leitura do ThingSpeak
-const char *ssid = "FALANGE_SUPREMA";         // Nome da rede wifi ssid
-const char *pass = "#kinecs#";                // Senha da rede wifi
-// const char *ssid = "Hotel Exclusivo";         // Nome da rede wifi ssid
-// const char *pass = "rwhe2008";                // Senha da rede wifi
+const char *apiWriteKey = ""; // Chave de gravação do ThingSpeak
+const char *apiReadKey = "";  // Chave de leitura do ThingSpeak
+const char *ssid = "";        // Nome da rede wifi ssid
+const char *pass = "";        // Senha da rede wifi
+const char *ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = 0;
+const int daylightOffset_sec = -3600 * 3;
 //-----------------------------------------------------------------------------------------------------------  DEFINIÇÕES
 #define SENSOR_FLUXO 27
 #define SENSOR_NIVEL_1 33
@@ -37,6 +39,7 @@ const char *pass = "#kinecs#";                // Senha da rede wifi
 //----------------------------------------------------------------------------------------------------- VARIAVEIS GLOBAIS
 long currentMillis = 0;
 long previousMillis = 0;
+long DECORRIDOMILLIS = 0;
 int interval = 1000; // Define o intervalo de leitura em milisegundos
 float calibrationFactor = 4.5;
 volatile byte pulseCount;
@@ -51,12 +54,26 @@ boolean bombStatus = 0;
 boolean potableSolenoidStatus = 0;
 boolean discardSolenoidStatus = 0;
 boolean levelSensor_1 = 0, levelSensor_2 = 0, levelSensor_3 = 0, levelSensor_4 = 0, levelSensor_5 = 0, levelSensor_6 = 0;
-int accumulatorLevel = 0, reservoirLevel = 0;
+int accumulatorLevel = 0, reservoirLevel = 0, DESCARTE_MAQUINA = 0, CONTADOR_ATUALIZACAO_SERVER = 0, MES_ATUAL, MES_ANTERIOR;
 boolean bombPower = 0;
 boolean statusLed = 0;
 String NUMERO_SERIE = "";
 String NIVEL_ACUMULADOR = "NUL", NIVEL_REUSO = "NUL", BOMBA_STATUS = "NULL";
 String NIVEL_1 = "", NIVEL_2 = "", NIVEL_3 = "", NIVEL_4 = "", NIVEL_5 = "", NIVEL_6 = "", SOLENOIDE_1 = "", SOLENOIDE_2 = "", BOMBA = "";
+
+// SIMBOLOS ESPECIAIS LCD LOGO UNIVESP
+byte SIMB1[8] = {B11100, B01110, B01110, B00111, B00111, B00111, B00011, B00011};
+byte SIMB2[8] = {B01111, B00111, B00011, B00011, B00011, B00001, B00001, B00001};
+byte SIMB3[8] = {B11110, B11100, B11000, B11000, B11000, B10000, B10000, B10000};
+byte SIMB4[8] = {B00111, B01110, B01110, B11100, B11100, B11100, B11000, B11000};
+byte SIMB5[8] = {B00011, B00001, B00001, B00000, B00000, B00000, B00000, B00000};
+byte SIMB6[8] = {B10000, B10000, B10000, B10000, B10000, B11100, B01111, B01111};
+byte SIMB7[8] = {B00001, B00001, B00011, B00011, B00011, B00111, B11110, B11110};
+byte SIMB8[8] = {B11000, B10000, B10000, B00000, B00000, B00000, B00000, B00000};
+
+WiFiClient client;
+LiquidCrystal_I2C lcd(LCD_ADDRESS, 20, 4); // Seta o endereço do LCD em 0x27 e configura o LCD de 20 colunas e 4 linhas
+MCP23017 myMCP = MCP23017(MCP_ADDRESS);
 
 //-----------------------------------------------------------------------------------------------------------       VOIDS
 void IRAM_ATTR pulseCounter()
@@ -71,18 +88,22 @@ void BOMBA_ACIONAMENTO(boolean STATUS_BOMBA_1)
     {
         digitalWrite(BOMBA_1, HIGH);
         bombPower = 1;
+        bombStatus = 1;
+        BOMBA_STATUS = "LIGA";
     }
     else
     {
         digitalWrite(BOMBA_1, LOW);
         bombPower = 0;
+        bombStatus = 0;
+        BOMBA_STATUS = "DESL";
     }
 }
 
 // Acionamento solenoide da agua potável
 void SOLOENOIDE_POTAVEL_ACIONAMENTO(boolean STATUS_SOLENOIDE_1)
 {
-    if (STATUS_SOLENOIDE_1 != 0)
+    if (STATUS_SOLENOIDE_1 == 1)
     {
         digitalWrite(SOLENOIDE_POTAVEL, HIGH);
         potableSolenoidStatus = 1;
@@ -97,7 +118,7 @@ void SOLOENOIDE_POTAVEL_ACIONAMENTO(boolean STATUS_SOLENOIDE_1)
 // Acionamento solenoide da agua descarte
 void SOLOENOIDE_REUSO_ACIONAMENTO(boolean STATUS_SOLENOIDE_2)
 {
-    if (STATUS_SOLENOIDE_2 != 0)
+    if (STATUS_SOLENOIDE_2 == 1)
     {
         digitalWrite(SOLENOIDE_DESCARTE, HIGH);
         discardSolenoidStatus = 1;
@@ -122,44 +143,55 @@ void RESETA_SERVER()
     ThingSpeak.setField(8, 0); // Status Solenoide Descarte
     ThingSpeak.setStatus("ZERA SERVIDOR");
     ThingSpeak.writeFields(1, apiWriteKey); // Envia o lote de informações para o servidor
+    Serial.println("SERVIDOR ZERADO.");
 }
 
-// SIMBOLOS ESPECIAIS LCD LOGO UNIVESP
-byte SIMB1[8] = {B11100, B01110, B01110, B00111, B00111, B00111, B00011, B00011};
-byte SIMB2[8] = {B01111, B00111, B00011, B00011, B00011, B00001, B00001, B00001};
-byte SIMB3[8] = {B11110, B11100, B11000, B11000, B11000, B10000, B10000, B10000};
-byte SIMB4[8] = {B00111, B01110, B01110, B11100, B11100, B11100, B11000, B11000};
-byte SIMB5[8] = {B00011, B00001, B00001, B00000, B00000, B00000, B00000, B00000};
-byte SIMB6[8] = {B10000, B10000, B10000, B10000, B10000, B11100, B01111, B01111};
-byte SIMB7[8] = {B00001, B00001, B00011, B00011, B00011, B00111, B11110, B11110};
-byte SIMB8[8] = {B11000, B10000, B10000, B00000, B00000, B00000, B00000, B00000};
-
-WiFiClient client;
-LiquidCrystal_I2C lcd(LCD_ADDRESS, 20, 4); // Seta o endereço do LCD em 0x27 e configura o LCD de 20 colunas e 4 linhas
-MCP23017 myMCP = MCP23017(MCP_ADDRESS);
+void PEGAR_HORA()
+{
+    String MES_TEMP = "";
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo))
+    {
+        Serial.println("Falha ao obter hora");
+        return;
+    }
+    Serial.println(&timeinfo, "%A, %d, %B, %Y, %H, %m, %S");
+    Serial.println(&timeinfo, "%d/%m/%Y");
+    MES_TEMP = (&timeinfo, "%m");
+    MES_ATUAL = MES_TEMP.toInt();
+    if (MES_ANTERIOR < MES_ATUAL)
+    {
+        Serial.println("RESETANDO SERVIDOR PARA O PROXIMO MES");
+        RESETA_SERVER();
+        MES_ANTERIOR = MES_ATUAL;
+        Serial.println("SERVIDOR FOI RESETADO.");
+    }
+}
 //------------------------------------------------------------------------------------------------- CARREGA CONFIGURAÇÕES
 void setup()
 {
     Serial.begin(9600); // Inicia a comunicação serial
-    UniqueIDdump(Serial);
+    // UniqueIDdump(Serial);
     NUMERO_SERIE = "MCUDEVICE-";
-    Serial.print("UniqueID: ");
+    // Serial.print("UniqueID: ");
     for (size_t i = 0; i < UniqueIDsize; i++)
     {
         if (UniqueID[i] < 0x10)
             Serial.print("0");
 
-        Serial.print(UniqueID[i], HEX);
+        // Serial.print(UniqueID[i], HEX);
         NUMERO_SERIE += String(UniqueID[i], HEX);
-        Serial.print("");
+        // Serial.print("");
     }
     Serial.println();
+
     NUMERO_SERIE.toUpperCase();
     Serial.println(NUMERO_SERIE);
     WiFi.mode(WIFI_STA);      // Coloca o WIFI do ESP32 em modo estação
     ThingSpeak.begin(client); // Inicializa a comunicação com o ThingSpeak
-    lcd.init();               // Incializa o LCD
-    lcd.backlight();          // Seta a Iluminação do LCD
+
+    lcd.init();      // Incializa o LCD
+    lcd.backlight(); // Seta a Iluminação do LCD
 
     // CRIA SIMBOLOS NO LCD
     lcd.createChar(1, SIMB1);
@@ -189,10 +221,9 @@ void setup()
     lcd.print("UNIVESP");
     lcd.setCursor(14, 3);
     lcd.print("4N88");
-    delay(10000);
+    delay(1000);
 
     myMCP.Init();
-
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print(" A REUTILIZACAO DA ");
@@ -217,7 +248,7 @@ void setup()
     lcd.write(255);
     delay(3000);
 
-    //lcd.clear();
+    // lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("");
     lcd.setCursor(0, 1);
@@ -230,7 +261,7 @@ void setup()
     lcd.write(255);
     delay(3000);
 
-    //lcd.clear();
+    // lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("  ANDRE LUIZ PRADO  ");
     lcd.setCursor(0, 1);
@@ -243,7 +274,7 @@ void setup()
     lcd.write(255);
     delay(3000);
 
-    //lcd.clear();
+    // lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("     DIEGO ALVES    ");
     lcd.setCursor(0, 1);
@@ -256,7 +287,7 @@ void setup()
     lcd.write(255);
     delay(3000);
 
-    //lcd.clear();
+    // lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("  ELTON SOLIGUETO   ");
     lcd.setCursor(0, 1);
@@ -269,7 +300,7 @@ void setup()
     lcd.write(255);
     delay(3000);
 
-    //lcd.clear();
+    // lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("   LILIAN ADRIANA   ");
     lcd.setCursor(0, 1);
@@ -282,7 +313,7 @@ void setup()
     lcd.write(255);
     delay(3000);
 
-    //lcd.clear();
+    // lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("  RODRIGO DE AVILA  ");
     lcd.setCursor(0, 1);
@@ -295,7 +326,7 @@ void setup()
     lcd.write(255);
     delay(3000);
 
-    //lcd.clear();
+    // lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("SERGIO LUIZ BARBOSA");
     lcd.setCursor(0, 1);
@@ -308,7 +339,7 @@ void setup()
     lcd.write(255);
     delay(3000);
 
-    //lcd.clear();
+    // lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("   VICTOR MAKTURA   ");
     lcd.setCursor(0, 1);
@@ -321,7 +352,7 @@ void setup()
     lcd.write(255);
     delay(3000);
 
-    //lcd.clear();
+    // lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("     ORIENTADORA    ");
     lcd.setCursor(0, 1);
@@ -333,8 +364,7 @@ void setup()
     lcd.setCursor(19, 3);
     lcd.write(255);
     delay(3000);
-
-     lcd.clear();
+    lcd.clear();
 
     // configurar as portas do microcontrolador como entradas de nivel alto
     Serial.println("SENSOR_FLUXO");
@@ -373,22 +403,14 @@ void setup()
     pulseCount = 0;
     flowRate = 0;
     flowMilliLitres = 0;
-
-    // CARREGA A INFORMAÇÃO DO SERVIDOR O TOTAL ACUMULADOR DE MILILITROS.
-    totalMilliLitres = ThingSpeak.readFloatField(1753394, 2, apiReadKey);
-    // CARREGA A INFORMAÇÃO DO SERVIDOR O TOTAL ACUMULADOR DE  LITROS.
-    totalLitres = ThingSpeak.readFloatField(1753394, 3, apiReadKey);
-
     previousMillis = 0;
 
-    // Cria uma interrupção para a porta do microcontrolador para o sensor de fluxo que funciona em modo HALL
-    attachInterrupt(digitalPinToInterrupt(SENSOR_FLUXO), pulseCounter, FALLING);
     /* FAZ A VERIFICAÇÃO SE TEM CONECTIVIDADE COM WIFI CASO TENHA PASSA A FRENTE CASO NÃO FAZ A CONEXÃO COM A REDE
      WIFI PRÉ ESTABELECIDA NA CONSTANTE SSID E PASS.*/
     if (WiFi.status() != WL_CONNECTED)
     {
         lcd.clear();
-        lcd.print("AGUARDE CONECTANDO...");
+        lcd.print("AGUARDE CONECTANDO..");
         Serial.println("AGUARDE CONECTANDO.");
         digitalWrite(LED_WIFI, LOW);
         while (WiFi.status() != WL_CONNECTED)
@@ -401,35 +423,48 @@ void setup()
         Serial.println("Conectado.");
         digitalWrite(LED_WIFI, HIGH);
     }
+    // CARREGA A INFORMAÇÃO DO SERVIDOR O TOTAL ACUMULADOR DE MILILITROS.
+    totalMilliLitres = ThingSpeak.readFloatField(1753394, 2, apiReadKey);
+    // CARREGA A INFORMAÇÃO DO SERVIDOR O TOTAL ACUMULADOR DE  LITROS.
+    totalLitres = ThingSpeak.readFloatField(1753394, 3, apiReadKey);
     // RESETA_SERVER();
 
+    // Cria uma interrupção para a porta do microcontrolador para o sensor de fluxo que funciona em modo HALL
+    attachInterrupt(digitalPinToInterrupt(SENSOR_FLUXO), pulseCounter, FALLING);
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer); // pegar hora certa do servidor ntp
+    PEGAR_HORA();
     delay(2000);
 }
 
 void LCD_TESTANDO() // ROTINA ESCREVE NO LCD TESTANDO
 {
-    for (int x = 0; x = 5; x++)
+    Serial.println("INICIO TEXTO TESTANDO");
+    for (int x = 0; x <= 5; x++)
     {
         lcd.setCursor(0, 3);
         lcd.print(F("AGUARDE TESTANDO    "));
-        delay(20);
+        delay(200);
         lcd.setCursor(0, 3);
         lcd.print(F("AGUARDE TESTANDO.   "));
-        delay(20);
+        delay(200);
         lcd.setCursor(0, 3);
         lcd.print(F("AGUARDE TESTANDO..  "));
-        delay(20);
+        delay(200);
         lcd.setCursor(0, 3);
         lcd.print(F("AGUARDE TESTANDO... "));
-        delay(20);
+        delay(200);
+        lcd.setCursor(0, 3);
         lcd.print(F("AGUARDE TESTANDO...."));
-        delay(20);
+        delay(200);
+        Serial.println(x);
     }
+    Serial.println("FIM TEXTO TESTANDO");
 }
 void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
 {
     if (SENSOR_NIVEL_3 == 0 || SENSOR_NIVEL_3 == 1 && SENSOR_NIVEL_2 == 0) // TESTA SENSORES NIVEL ACUMULADOR
     {
+        Serial.println("ERRO: P1 - INICIO");
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.print(F("! TESTE ACUMULADOR !"));
@@ -440,10 +475,12 @@ void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
         lcd.setCursor(0, 3);
         lcd.print(F("!!!! VERIFICAR !!!!"));
         delay(10000);
-        TESTE_SENSORES();
+        // TESTE_SENSORES();
+        Serial.println("ERRO: P1 - FIM");
     }
     else
     {
+        Serial.println("ERRO: P2 - INICIO");
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.print(F("! TESTE ACUMULADOR !"));
@@ -455,10 +492,13 @@ void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
         lcd.setCursor(0, 3);
         lcd.print(F("      SENSOR OK     "));
         delay(3000);
+        Serial.println("ERRO: P2 - FIM");
+        loop();
     }
 
     if (SENSOR_NIVEL_6 == 1 && SENSOR_NIVEL_5 == 0 && SENSOR_NIVEL_4 == 0) // TESTA SENSORES NIVEL RESERVATÓRIO  NIVEL MÁXIMO COM PROBLEMA
     {
+        Serial.println("ERRO: P3 - INICIO");
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.print(F(" TESTE RESERVATORIO "));
@@ -469,12 +509,14 @@ void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
         lcd.setCursor(0, 3);
         lcd.print(F("!!!! VERIFICAR !!!!"));
         delay(10000);
-        TESTE_SENSORES();
+        // TESTE_SENSORES();
+        Serial.println("ERRO: P3 - FIM");
     }
     else
     {
         if (SENSOR_NIVEL_6 == 0 && SENSOR_NIVEL_5 == 1 && SENSOR_NIVEL_4 == 0) // TESTA SENSORES NIVEL RESERVATÓRIO NIVEL MÉDIO COM PROBLEMA
         {
+            Serial.println("ERRO: P4 - INICIO");
             lcd.clear();
             lcd.setCursor(0, 0);
             lcd.print(F(" TESTE RESERVATORIO "));
@@ -485,12 +527,14 @@ void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
             lcd.setCursor(0, 3);
             lcd.print(F("!!!! VERIFICAR !!!!"));
             delay(10000);
-            TESTE_SENSORES();
+            // TESTE_SENSORES();
+            Serial.println("ERRO: P4 - FIM");
         }
         else
         {
             if (SENSOR_NIVEL_6 == 1 && SENSOR_NIVEL_5 == 1 && SENSOR_NIVEL_4 == 0) // TESTA SENSORES NIVEL RESERVATÓRIO NIVEL MINIMO COM PROBLEMA
             {
+                Serial.println("ERRO: P5 - INICIO");
                 lcd.clear();
                 lcd.setCursor(0, 0);
                 lcd.print(F(" TESTE RESERVATORIO "));
@@ -501,12 +545,14 @@ void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
                 lcd.setCursor(0, 3);
                 lcd.print(F("!!!! VERIFICAR !!!!"));
                 delay(10000);
-                TESTE_SENSORES();
+                // TESTE_SENSORES();
+                Serial.println("ERRO: P5 - FIM");
             }
             else
             {
                 if (SENSOR_NIVEL_6 == 1 && SENSOR_NIVEL_5 == 0 && SENSOR_NIVEL_4 == 1) // TESTA SENSORES NIVEL RESERVATÓRIO TODOS OS NIVEIS COM PROBLEMA
                 {
+                    Serial.println("ERRO: P6 - INICIO");
                     lcd.clear();
                     lcd.setCursor(0, 0);
                     lcd.print(F(" TESTE RESERVATORIO "));
@@ -517,12 +563,14 @@ void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
                     lcd.setCursor(0, 3);
                     lcd.print(F("!!!! VERIFICAR !!!!"));
                     delay(10000);
-                    TESTE_SENSORES();
+                    // TESTE_SENSORES();
+                    Serial.println("ERRO: P6 - FIM");
                 }
                 else
                 {
                     if (SENSOR_NIVEL_6 != 1 || SENSOR_NIVEL_6 != 0 || SENSOR_NIVEL_5 != 1 || SENSOR_NIVEL_5 != 0 || SENSOR_NIVEL_4 != 1 || SENSOR_NIVEL_4 != 0) // TESTA SENSORES NIVEL RESERVATÓRIO
                     {
+                        Serial.println("ERRO: P7 - INICIO");
                         lcd.clear();
                         lcd.setCursor(0, 0);
                         lcd.print(F(" TESTE RESERVATORIO "));
@@ -533,10 +581,12 @@ void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
                         lcd.setCursor(0, 3);
                         lcd.print(F("!!!! VERIFICAR !!!!"));
                         delay(10000);
-                        TESTE_SENSORES();
+                        // TESTE_SENSORES();
+                        Serial.println("ERRO: P7 - FIM");
                     }
                     else
                     {
+                        Serial.println("ERRO: P8 - INICIO");
                         lcd.clear();
                         lcd.setCursor(0, 0);
                         lcd.print(F(" TESTE RESERVATORIO "));
@@ -548,6 +598,8 @@ void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
                         lcd.setCursor(0, 3);
                         lcd.print(F("      SENSOR OK     "));
                         delay(3000);
+                        Serial.println("ERRO: 8 - FIM");
+                        loop();
                     }
                 }
             }
@@ -573,26 +625,27 @@ void ERRO_SISTEMA(int SITUACAO_SISTEMA, String ERRO_LOCAL, String ERRO_DESCRICAO
         lcd.setCursor(0, 3);
         lcd.print(ERRO_DESCRICAO);
         delay(10000);
-        for (int x = 1; x < 5; x++)
+        for (int x = 0; x <= 5; x++)
         {
             lcd.setCursor(0, 3);
             lcd.print(F("                    "));
-            delay(100);
+            delay(1000);
             lcd.setCursor(0, 3);
             lcd.print(ERRO_DESCRICAO);
-            delay(100);
+            delay(500);
             lcd.noBacklight();
-            delay(20);
+            delay(500);
             lcd.backlight();
+            delay(500);
         }
         TESTE_SENSORES();
     }
 }
 
-
 //------------------------------------------------------------------------------------- Loop infinito do microcontrolador
 void loop()
 {
+    DECORRIDOMILLIS = millis();
     digitalWrite(LED_STATUS, LOW);
     currentMillis = millis();
     if (currentMillis - previousMillis > interval)
@@ -623,6 +676,7 @@ void loop()
 
         totalMilliLitres += flowMilliLitres;
         totalLitres += flowLitres;
+
         levelSensor_1 = digitalRead(SENSOR_NIVEL_1);
         levelSensor_2 = digitalRead(SENSOR_NIVEL_2);
         levelSensor_3 = digitalRead(SENSOR_NIVEL_3);
@@ -670,18 +724,66 @@ void loop()
         Serial.print(potableSolenoidStatus); // Envia para Serial Monitor Status Solenoide Potavel
         Serial.print(" | ");                 // Envia para Serial Monitor a separação
         Serial.print("SP: ");
-        Serial.println(bombStatus); // Envia para Serial Monitor Status Bomba
+        Serial.print(bombStatus); // Envia para Serial Monitor Status Bomba
+
+        // ACIONAMENTO DESCARTE DE AGUA
+        if (levelSensor_1 == 1 && DESCARTE_MAQUINA == 0)
+        {
+            SOLOENOIDE_REUSO_ACIONAMENTO(0);
+            DESCARTE_MAQUINA++;
+        }
+        else
+        {
+            if (levelSensor_1 == 0 && DESCARTE_MAQUINA == 0)
+            {
+                SOLOENOIDE_REUSO_ACIONAMENTO(0);
+                // DESCARTE_MAQUINA++;
+            }
+            else
+            {
+                if (levelSensor_1 == 1 && DESCARTE_MAQUINA == 1)
+                {
+                    SOLOENOIDE_REUSO_ACIONAMENTO(1);
+                    DESCARTE_MAQUINA++;
+                }
+                else
+                {
+                    if (levelSensor_1 == 0 && DESCARTE_MAQUINA == 1)
+                    {
+                        SOLOENOIDE_REUSO_ACIONAMENTO(0);
+                        DESCARTE_MAQUINA++;
+                    }
+                    else
+                    {
+                        if (levelSensor_1 == 0 && DESCARTE_MAQUINA == -1)
+                        {
+                            DESCARTE_MAQUINA = 1;
+                        }
+                    }
+                }
+            }
+        }
 
         // NIVEL DO ACUMULADOR
         if (levelSensor_2 == 1 && levelSensor_3 == 1)
         {
+            bombStatus = 0;
             NIVEL_ACUMULADOR = "MAX";
             accumulatorLevel = 100;
+            if (reservoirLevel == 50 || reservoirLevel == 10 || reservoirLevel == 0)
+            {
+                BOMBA_ACIONAMENTO(1);
+            }
+            else
+            {
+                BOMBA_ACIONAMENTO(0);
+            }
         }
         else
         {
             if (levelSensor_2 == 1 && levelSensor_3 == 0)
             {
+                bombStatus = 1;
                 NIVEL_ACUMULADOR = "MIN";
                 accumulatorLevel = 10;
             }
@@ -689,15 +791,26 @@ void loop()
             {
                 if (levelSensor_2 == 0 && levelSensor_3 == 0)
                 {
+                    bombStatus = 0;
                     NIVEL_ACUMULADOR = "---";
                     accumulatorLevel = 0;
                     BOMBA_ACIONAMENTO(0);
                 }
                 else
                 {
-                    NIVEL_ACUMULADOR = "ERR";
-                    accumulatorLevel = 0;
-                    ERRO_SISTEMA(1, "VERIFICAR ACUMULADOR", "SENSORES DE NIVEL");
+                    if (levelSensor_2 == 0 || levelSensor_2 == 1 && levelSensor_3 == 0 || levelSensor_3 == 1)
+                    {
+                        bombStatus = 0;
+                        NIVEL_ACUMULADOR = "---";
+                        accumulatorLevel = 0;
+                        BOMBA_ACIONAMENTO(0);
+                    }
+                    else
+                    {
+                        NIVEL_ACUMULADOR = "ERR";
+                        accumulatorLevel = 0;
+                        ERRO_SISTEMA(1, "VERIFICAR ACUMULADOR", "SENSORES DE NIVEL");
+                    }
                 }
             }
         }
@@ -708,6 +821,15 @@ void loop()
             bombStatus = 0;
             NIVEL_REUSO = "MIM";
             reservoirLevel = 10;
+            SOLOENOIDE_POTAVEL_ACIONAMENTO(0);
+            if (accumulatorLevel == 10 || accumulatorLevel == 0)
+            {
+                BOMBA_ACIONAMENTO(0);
+            }
+            else
+            {
+                BOMBA_ACIONAMENTO(1);
+            }
         }
         else
         {
@@ -716,6 +838,15 @@ void loop()
                 bombStatus = 0;
                 NIVEL_REUSO = "MED";
                 reservoirLevel = 50;
+                SOLOENOIDE_POTAVEL_ACIONAMENTO(0);
+                if (accumulatorLevel == 10 || accumulatorLevel == 0)
+                {
+                    BOMBA_ACIONAMENTO(0);
+                }
+                else
+                {
+                    BOMBA_ACIONAMENTO(1);
+                }
             }
             else
             {
@@ -724,6 +855,8 @@ void loop()
                     bombStatus = 1;
                     NIVEL_REUSO = "MAX";
                     reservoirLevel = 100;
+                    SOLOENOIDE_POTAVEL_ACIONAMENTO(0);
+                    BOMBA_ACIONAMENTO(0);
                 }
                 else
                 {
@@ -733,14 +866,34 @@ void loop()
                         SOLOENOIDE_POTAVEL_ACIONAMENTO(1);
                         NIVEL_REUSO = "---";
                         reservoirLevel = 0;
+                        if (accumulatorLevel == 10 || accumulatorLevel == 0)
+                        {
+                            BOMBA_ACIONAMENTO(0);
+                        }
+                        else
+                        {
+                            BOMBA_ACIONAMENTO(1);
+                        }
                     }
                     else
                     {
-                        bombStatus = 1;
-                        SOLOENOIDE_POTAVEL_ACIONAMENTO(1);
-                        NIVEL_REUSO = "ERR";
-                        reservoirLevel = 0;
-                        ERRO_SISTEMA(1, "VERIFICAR RESERVATORIO", "SENSORES DE NIVEL");
+                        if (levelSensor_4 == 0 || levelSensor_4 == 1 && levelSensor_5 == 0 || levelSensor_5 == 1 && levelSensor_6 == 0 || levelSensor_6 == 1)
+                        {
+                            bombStatus = 0;
+                            SOLOENOIDE_POTAVEL_ACIONAMENTO(1);
+                            NIVEL_REUSO = "---";
+                            reservoirLevel = 0;
+                            BOMBA_ACIONAMENTO(1);
+                        }
+                        else
+                        {
+                            bombStatus = 1;
+                            SOLOENOIDE_POTAVEL_ACIONAMENTO(1);
+                            BOMBA_ACIONAMENTO(0);
+                            NIVEL_REUSO = "ERR";
+                            reservoirLevel = 0;
+                            ERRO_SISTEMA(1, "VERIFICAR RESERVATORIO", "SENSORES DE NIVEL");
+                        }
                     }
                 }
             }
@@ -785,25 +938,53 @@ void loop()
         lcd.setCursor(0, 2);
         lcd.print(F("B1"));
         lcd.setCursor(2, 2);
-        lcd.write(B11111111);
+        if (levelSensor_1 == 1)
+        {
+            lcd.write(255);
+        }
+        else
+        {
+            lcd.write(219);
+        }
         lcd.setCursor(3, 2);
         lcd.print("|");
         lcd.setCursor(4, 2);
         lcd.print(F("B3"));
         lcd.setCursor(6, 2);
-        lcd.write(B11111111);
+        if (levelSensor_3 == 1)
+        {
+            lcd.write(255);
+        }
+        else
+        {
+            lcd.write(219);
+        }
         lcd.setCursor(7, 2);
         lcd.print("|");
         lcd.setCursor(8, 2);
         lcd.print(F("B5"));
         lcd.setCursor(10, 2);
-        lcd.write(B11111111);
+        if (levelSensor_5 == 1)
+        {
+            lcd.write(255);
+        }
+        else
+        {
+            lcd.write(219);
+        }
         lcd.setCursor(11, 2);
         lcd.print("|");
         lcd.setCursor(12, 2);
         lcd.print(F("S1"));
         lcd.setCursor(14, 2);
-        lcd.write(B11111111);
+        if (discardSolenoidStatus == 1)
+        {
+            lcd.write(255);
+        }
+        else
+        {
+            lcd.write(219);
+        }
         lcd.setCursor(15, 2);
         lcd.print("|");
         lcd.setCursor(16, 2);
@@ -812,31 +993,59 @@ void loop()
         lcd.setCursor(0, 3);
         lcd.print(F("B2"));
         lcd.setCursor(2, 3);
-        lcd.write(B11111111);
+        if (levelSensor_2 == 1)
+        {
+            lcd.write(255);
+        }
+        else
+        {
+            lcd.write(219);
+        }
         lcd.setCursor(3, 3);
         lcd.print("|");
         lcd.setCursor(4, 3);
         lcd.print(F("B4"));
         lcd.setCursor(6, 3);
-        lcd.write(B11111111);
+        if (levelSensor_4 == 1)
+        {
+            lcd.write(255);
+        }
+        else
+        {
+            lcd.write(219);
+        }
         lcd.setCursor(7, 3);
         lcd.print("|");
         lcd.setCursor(8, 3);
         lcd.print(F("B6"));
         lcd.setCursor(10, 3);
-        lcd.write(B11111111);
+        if (levelSensor_6 == 1)
+        {
+            lcd.write(255);
+        }
+        else
+        {
+            lcd.write(219);
+        }
         lcd.setCursor(11, 3);
         lcd.print("|");
         lcd.setCursor(12, 3);
         lcd.print(F("S2"));
         lcd.setCursor(14, 3);
-        lcd.write(B11111111);
+        if (potableSolenoidStatus == 1)
+        {
+            lcd.write(255);
+        }
+        else
+        {
+            lcd.write(219);
+        }
         lcd.setCursor(15, 3);
         lcd.print("|");
         lcd.setCursor(16, 3);
         lcd.print(BOMBA_STATUS);
 
-        if (float(flowRate) > !0)
+        if (CONTADOR_ATUALIZACAO_SERVER == 192)
         {
             // Carrega as informações para serem enviadas em um lote somente para o servidor
             ThingSpeak.setField(1, float(flowRate));         // Fluxo corrente
@@ -849,16 +1058,21 @@ void loop()
             ThingSpeak.setField(8, discardSolenoidStatus);   // Status Solenoide Descarte
             ThingSpeak.setStatus(NUMERO_SERIE);
             ThingSpeak.writeFields(1, apiWriteKey); // Envia o lote de informações para o servidor
+            CONTADOR_ATUALIZACAO_SERVER = 0;
         }
-        else
+        /*else
         {
             // Carrega a informação do servidor o total acumulada de mililitros
             totalMilliLitres = ThingSpeak.readFloatField(1753394, 2, apiReadKey);
             // Carrega a informação do servidor o total acumulado de litros.
             totalLitres = ThingSpeak.readFloatField(1753394, 3, apiReadKey);
-        }
+        }*/
+        CONTADOR_ATUALIZACAO_SERVER++;
+        digitalWrite(LED_STATUS, HIGH);
+        Serial.print(" | "); // Envia para Serial Monitor a separação
+        Serial.print("TEMPO: ");
+        Serial.print((millis() - DECORRIDOMILLIS)); // Envia para Serial Monitor Tempo decorrido em ms
+        Serial.println("ms");
+        delay(500);
     }
-    digitalWrite(LED_STATUS, HIGH);
-    delay(500);
 }
-
