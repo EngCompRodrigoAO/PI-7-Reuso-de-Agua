@@ -10,10 +10,10 @@
 #include <time.h>
 
 //-----------------------------------------------------------------------------------------------------------   CONSTANTES
-const char *apiWriteKey = ""; // Chave de gravação do ThingSpeak
-const char *apiReadKey = "";  // Chave de leitura do ThingSpeak
-const char *ssid = "";        // Nome da rede wifi ssid
-const char *pass = "";        // Senha da rede wifi
+const char *apiWriteKey = "1OCLPVHNGHJUTZYH"; // Chave de gravação do ThingSpeak
+const char *apiReadKey = "3HPJPRL5N7JV1MS3";  // Chave de leitura do ThingSpeak
+const char *ssid = "FALANGE_SUPREMA";         // Nome da rede wifi ssid
+const char *pass = "#kinecs#";                // Senha da rede wifi
 const char *ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 0;
 const int daylightOffset_sec = -3600 * 3;
@@ -60,7 +60,7 @@ boolean statusLed = 0;
 String NUMERO_SERIE = "";
 String NIVEL_ACUMULADOR = "NUL", NIVEL_REUSO = "NUL", BOMBA_STATUS = "NULL";
 String NIVEL_1 = "", NIVEL_2 = "", NIVEL_3 = "", NIVEL_4 = "", NIVEL_5 = "", NIVEL_6 = "", SOLENOIDE_1 = "", SOLENOIDE_2 = "", BOMBA = "";
-
+boolean BOTAO_STATUS;
 // SIMBOLOS ESPECIAIS LCD LOGO UNIVESP
 byte SIMB1[8] = {B11100, B01110, B01110, B00111, B00111, B00111, B00011, B00011};
 byte SIMB2[8] = {B01111, B00111, B00011, B00011, B00011, B00001, B00001, B00001};
@@ -79,55 +79,6 @@ MCP23017 myMCP = MCP23017(MCP_ADDRESS);
 void IRAM_ATTR pulseCounter()
 {
     pulseCount++;
-}
-
-// acionamento da bomba 1
-void BOMBA_ACIONAMENTO(boolean STATUS_BOMBA_1)
-{
-    if (STATUS_BOMBA_1 == 1 && bombStatus == 0)
-    {
-        digitalWrite(BOMBA_1, HIGH);
-        bombPower = 1;
-        bombStatus = 1;
-        BOMBA_STATUS = "LIGA";
-    }
-    else
-    {
-        digitalWrite(BOMBA_1, LOW);
-        bombPower = 0;
-        bombStatus = 0;
-        BOMBA_STATUS = "DESL";
-    }
-}
-
-// Acionamento solenoide da agua potável
-void SOLOENOIDE_POTAVEL_ACIONAMENTO(boolean STATUS_SOLENOIDE_1)
-{
-    if (STATUS_SOLENOIDE_1 == 1)
-    {
-        digitalWrite(SOLENOIDE_POTAVEL, HIGH);
-        potableSolenoidStatus = 1;
-    }
-    else
-    {
-        digitalWrite(SOLENOIDE_POTAVEL, LOW);
-        potableSolenoidStatus = 0;
-    }
-}
-
-// Acionamento solenoide da agua descarte
-void SOLOENOIDE_REUSO_ACIONAMENTO(boolean STATUS_SOLENOIDE_2)
-{
-    if (STATUS_SOLENOIDE_2 == 1)
-    {
-        digitalWrite(SOLENOIDE_DESCARTE, HIGH);
-        discardSolenoidStatus = 1;
-    }
-    else
-    {
-        digitalWrite(SOLENOIDE_DESCARTE, LOW);
-        discardSolenoidStatus = 0;
-    }
 }
 
 void RESETA_SERVER()
@@ -192,6 +143,129 @@ void setup()
 
     lcd.init();      // Incializa o LCD
     lcd.backlight(); // Seta a Iluminação do LCD
+    lcd.print("..INICIALIZANDO...");
+    delay(200);
+    // configurar as portas do microcontrolador como entradas de nivel alto
+    Serial.println("SENSOR_FLUXO");
+    pinMode(SENSOR_FLUXO, INPUT_PULLUP); // Seta o comportamento da porta do microcontrolador
+    Serial.println("SENSOR_NIVEL_1");
+    pinMode(SENSOR_NIVEL_1, INPUT_PULLUP); // Seta a porta 33 do microcontrolador para sensor nivel 1 como entrada
+    Serial.println("SENSOR_NIVEL_2");
+    pinMode(SENSOR_NIVEL_2, INPUT_PULLUP); // Seta a porta 26 do microcontrolador para sensor nivel 2 como entrada
+    Serial.println("SENSOR_NIVEL_3");
+    pinMode(SENSOR_NIVEL_3, INPUT_PULLUP); // Seta a porta 25 do microcontrolador para sensor nivel 3 como entrada
+    Serial.println("SENSOR_NIVEL_4");
+    pinMode(SENSOR_NIVEL_4, INPUT_PULLUP); // Seta a porta 14 do microcontrolador para sensor nivel 4 como entrada
+    Serial.println("SENSOR_NIVEL_5");
+    pinMode(SENSOR_NIVEL_5, INPUT_PULLUP); // Seta a porta 13 do microcontrolador para sensor nivel 5 como entrada
+    Serial.println("SENSOR_NIVEL_6");
+    pinMode(SENSOR_NIVEL_6, INPUT_PULLUP); // Seta a porta 12 do microcontrolador para sensor nivel 6 como entrada
+
+    // configurar as portas do microcontrolador como saidas
+    Serial.println("LED_STATUS");
+    pinMode(LED_STATUS, OUTPUT); // Seta a porta 15 do microcontrolador para led de status como saida
+    Serial.println("LED_WIFI");
+    pinMode(LED_WIFI, OUTPUT); // Seta a porta 2 do microcontrolador para led de status como saida
+    Serial.println("SOLENOIDE_POTAVEL");
+    pinMode(SOLENOIDE_POTAVEL, OUTPUT); // Seta a porta 5 do microcontrolador para solenoide potavel como saida
+    Serial.println("SOLENOIDE_DESCARTE");
+    pinMode(SOLENOIDE_DESCARTE, OUTPUT); // Seta a porta 4 do microcontrolador para solenoide descarte como saida
+    Serial.println("BOMBA_1");
+    pinMode(BOMBA_1, OUTPUT); // Seta a porta 32 do microcontrolador para bomba como saida
+    // Configura as portas do MCP23017
+    Serial.println("MCP23017");
+
+    myMCP.setPortMode(0b11111111, B); // Porta A: todos pinos como OUTPUT
+    myMCP.setPortMode(0b11110111, A); // Porta B: B0 - B3 pinos como OUTPUT, B4-B7 pinos como INPUT
+    myMCP.setAllPins(A, OFF);         // Porta A: todos pinos em LOW
+    myMCP.setAllPins(B, ON);          // Porta B: todos pinos em LOW
+
+    // MCP23017 PORT A
+    // myMCP.setPin(0, A, LOW);
+    // myMCP.setPin(1, A, LOW);
+    myMCP.setPin(6, A, INPUT); // BOTÃO RESET
+    /*BOTAO_STATUS = myMCP.getPin(6, A);
+    Serial.println("TESTE BOTAO");
+    Serial.println(BOTAO_STATUS, BIN);
+    delay(5000);
+    Serial.println("PRESSIONE BOTAO");
+    delay(5000);
+    BOTAO_STATUS = myMCP.getPin(6, A);
+    Serial.println(BOTAO_STATUS, BIN);
+    delay(5000);
+    Serial.println("SOLTE BOTAO");
+    delay(5000);
+    */
+    lcd.clear();
+    lcd.print("EXECULTANDO TESTES");
+    Serial.println("SISTEMA VERMELHO");
+    myMCP.setPin(3, A, HIGH);
+    delay(200);
+    myMCP.setPin(3, A, LOW);
+    delay(200);
+    Serial.println("SISTEMA VERDE");
+    myMCP.setPin(4, A, HIGH);
+    delay(200);
+    Serial.println("WIFI");
+    myMCP.setPin(7, A, HIGH);
+    delay(200);
+    myMCP.setPin(7, A, LOW);
+    delay(100);
+    Serial.println("VIDA");
+    myMCP.setPin(1, A, HIGH);
+    delay(200);
+    myMCP.setPin(1, A, LOW);
+    delay(200);
+    Serial.println("LIGADO");
+    myMCP.setPin(0, A, HIGH);
+    delay(200);
+    myMCP.setPin(0, A, LOW);
+    delay(200);
+
+    myMCP.setPin(0, A, HIGH);
+    myMCP.setPin(1, A, HIGH);
+    // MCP23017 PORT B
+    myMCP.setPin(0, B, LOW); // SSR1
+    delay(200);
+    myMCP.setPin(0, B, HIGH); // SSR1
+    delay(200);
+    myMCP.setPin(1, B, LOW);
+    delay(200);
+    myMCP.setPin(1, B, HIGH);
+    delay(200);
+    myMCP.setPin(2, B, LOW);
+    delay(200);
+    myMCP.setPin(2, B, HIGH);
+    delay(200);
+    myMCP.setPin(3, B, LOW);
+    delay(200);
+    myMCP.setPin(3, B, HIGH);
+    delay(200);
+    myMCP.setPin(4, B, LOW);
+    delay(200);
+    myMCP.setPin(4, B, HIGH);
+    delay(200);
+    myMCP.setPin(5, B, LOW);
+    delay(200);
+    myMCP.setPin(5, B, HIGH);
+    delay(200);
+    myMCP.setPin(6, B, LOW);
+    delay(200);
+    myMCP.setPin(6, B, HIGH);
+    delay(200);
+    myMCP.setPin(7, B, LOW);
+    delay(200);
+    myMCP.setPin(7, B, HIGH);
+    delay(200);
+
+    myMCP.setPin(0, B, HIGH); // SSR_1
+    myMCP.setPin(1, B, HIGH); // SSR_2
+    myMCP.setPin(2, B, HIGH); // SSR_3
+    myMCP.setPin(3, B, HIGH); // SSR_4
+    myMCP.setPin(4, B, HIGH); // RELE_4
+    myMCP.setPin(5, B, HIGH); // RELE_3
+    myMCP.setPin(6, B, HIGH); // RELE_2
+    myMCP.setPin(7, B, HIGH); // RELE_1
 
     // CRIA SIMBOLOS NO LCD
     lcd.createChar(1, SIMB1);
@@ -205,7 +279,9 @@ void setup()
 
     byte Count = 1;
     lcd.clear();
-
+    lcd.print("SISTEMA OK");
+    delay(2000);
+    lcd.clear();
     // MOSTRA NO LCD OS BYTES PARA SIMBOLOS SIMB1, SIMB2, SIMB3...
     for (byte y = 1; y < 3; y++)
     {
@@ -216,12 +292,11 @@ void setup()
             Count++;
         }
     }
-
     lcd.setCursor(0, 0);
     lcd.print("UNIVESP");
     lcd.setCursor(14, 3);
     lcd.print("4N88");
-    delay(1000);
+    delay(5000);
 
     myMCP.Init();
     lcd.clear();
@@ -248,7 +323,7 @@ void setup()
     lcd.write(255);
     delay(3000);
 
-    // lcd.clear();
+    lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("");
     lcd.setCursor(0, 1);
@@ -366,40 +441,6 @@ void setup()
     delay(3000);
     lcd.clear();
 
-    // configurar as portas do microcontrolador como entradas de nivel alto
-    Serial.println("SENSOR_FLUXO");
-    pinMode(SENSOR_FLUXO, INPUT_PULLUP); // Seta o comportamento da porta do microcontrolador
-    Serial.println("SENSOR_NIVEL_1");
-    pinMode(SENSOR_NIVEL_1, INPUT_PULLUP); // Seta a porta 33 do microcontrolador para sensor nivel 1 como entrada
-    Serial.println("SENSOR_NIVEL_2");
-    pinMode(SENSOR_NIVEL_2, INPUT_PULLUP); // Seta a porta 26 do microcontrolador para sensor nivel 2 como entrada
-    Serial.println("SENSOR_NIVEL_3");
-    pinMode(SENSOR_NIVEL_3, INPUT_PULLUP); // Seta a porta 25 do microcontrolador para sensor nivel 3 como entrada
-    Serial.println("SENSOR_NIVEL_4");
-    pinMode(SENSOR_NIVEL_4, INPUT_PULLUP); // Seta a porta 14 do microcontrolador para sensor nivel 4 como entrada
-    Serial.println("SENSOR_NIVEL_5");
-    pinMode(SENSOR_NIVEL_5, INPUT_PULLUP); // Seta a porta 13 do microcontrolador para sensor nivel 5 como entrada
-    Serial.println("SENSOR_NIVEL_6");
-    pinMode(SENSOR_NIVEL_6, INPUT_PULLUP); // Seta a porta 12 do microcontrolador para sensor nivel 6 como entrada
-
-    // configurar as portas do microcontrolador como saidas
-    Serial.println("LED_STATUS");
-    pinMode(LED_STATUS, OUTPUT); // Seta a porta 15 do microcontrolador para led de status como saida
-    Serial.println("LED_WIFI");
-    pinMode(LED_WIFI, OUTPUT); // Seta a porta 2 do microcontrolador para led de status como saida
-    Serial.println("SOLENOIDE_POTAVEL");
-    pinMode(SOLENOIDE_POTAVEL, OUTPUT); // Seta a porta 5 do microcontrolador para solenoide potavel como saida
-    Serial.println("SOLENOIDE_DESCARTE");
-    pinMode(SOLENOIDE_DESCARTE, OUTPUT); // Seta a porta 4 do microcontrolador para solenoide descarte como saida
-    Serial.println("BOMBA_1");
-    pinMode(BOMBA_1, OUTPUT); // Seta a porta 32 do microcontrolador para bomba como saida
-    // Configura as portas do MCP23017
-    Serial.println("MCP23017");
-    myMCP.setAllPins(A, OFF);         // Porta A: todos pinos em LOW
-    myMCP.setAllPins(B, OFF);         // Porta B: todos pinos em LOW
-    myMCP.setPortMode(0b11111111, A); // Porta A: todos pinos como OUTPUT
-    myMCP.setPortMode(0b11110000, B); // Porta B: B0 - B3 pinos como OUTPUT, B4-B7 pinos como INPUT
-
     pulseCount = 0;
     flowRate = 0;
     flowMilliLitres = 0;
@@ -410,18 +451,38 @@ void setup()
     if (WiFi.status() != WL_CONNECTED)
     {
         lcd.clear();
+        lcd.print("PROCURANDO WIFI.");
+        delay(2000);
+        lcd.clear();
+        lcd.print("PROCURANDO WIFI..");
+        delay(2000);
+        lcd.clear();
+        lcd.print("PROCURANDO WIFI...");
+        delay(2000);
+        lcd.clear();
+        lcd.print("PROCURANDO WIFI...");
+        delay(2000);
+        lcd.clear();
+        lcd.print("PROCURANDO WIFI....");
+        delay(2000);
+        lcd.clear();
+        lcd.print("!!WIFI ENCONTRADO!!");
+        delay(2000);
+        lcd.clear();
         lcd.print("AGUARDE CONECTANDO..");
         Serial.println("AGUARDE CONECTANDO.");
         digitalWrite(LED_WIFI, LOW);
+        myMCP.setPin(7, A, LOW);
         while (WiFi.status() != WL_CONNECTED)
         {
             WiFi.begin(ssid, pass);
             delay(5000);
         }
         lcd.clear();
-        lcd.print("Conectado.");
+        lcd.print("WIFI CONECTADO.");
         Serial.println("Conectado.");
         digitalWrite(LED_WIFI, HIGH);
+        myMCP.setPin(7, A, HIGH);
     }
     // CARREGA A INFORMAÇÃO DO SERVIDOR O TOTAL ACUMULADOR DE MILILITROS.
     totalMilliLitres = ThingSpeak.readFloatField(1753394, 2, apiReadKey);
@@ -443,18 +504,23 @@ void LCD_TESTANDO() // ROTINA ESCREVE NO LCD TESTANDO
     {
         lcd.setCursor(0, 3);
         lcd.print(F("AGUARDE TESTANDO    "));
+        myMCP.setPin(3, A, HIGH);
         delay(200);
         lcd.setCursor(0, 3);
         lcd.print(F("AGUARDE TESTANDO.   "));
+        myMCP.setPin(3, A, HIGH);
         delay(200);
         lcd.setCursor(0, 3);
         lcd.print(F("AGUARDE TESTANDO..  "));
+        myMCP.setPin(3, A, HIGH);
         delay(200);
         lcd.setCursor(0, 3);
         lcd.print(F("AGUARDE TESTANDO... "));
+        myMCP.setPin(4, A, HIGH);
         delay(200);
         lcd.setCursor(0, 3);
         lcd.print(F("AGUARDE TESTANDO...."));
+        myMCP.setPin(4, A, HIGH);
         delay(200);
         Serial.println(x);
     }
@@ -462,6 +528,8 @@ void LCD_TESTANDO() // ROTINA ESCREVE NO LCD TESTANDO
 }
 void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
 {
+    myMCP.setPin(4, A, LOW);
+    myMCP.setPin(3, A, HIGH);
     if (SENSOR_NIVEL_3 == 0 || SENSOR_NIVEL_3 == 1 && SENSOR_NIVEL_2 == 0) // TESTA SENSORES NIVEL ACUMULADOR
     {
         Serial.println("ERRO: P1 - INICIO");
@@ -493,7 +561,7 @@ void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
         lcd.print(F("      SENSOR OK     "));
         delay(3000);
         Serial.println("ERRO: P2 - FIM");
-        loop();
+        // loop();
     }
 
     if (SENSOR_NIVEL_6 == 1 && SENSOR_NIVEL_5 == 0 && SENSOR_NIVEL_4 == 0) // TESTA SENSORES NIVEL RESERVATÓRIO  NIVEL MÁXIMO COM PROBLEMA
@@ -597,6 +665,8 @@ void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
                         LCD_TESTANDO();
                         lcd.setCursor(0, 3);
                         lcd.print(F("      SENSOR OK     "));
+                        myMCP.setPin(3, A, LOW);
+                        myMCP.setPin(4, A, HIGH);
                         delay(3000);
                         Serial.println("ERRO: 8 - FIM");
                         loop();
@@ -608,9 +678,11 @@ void TESTE_SENSORES() // ROTINA PARA TESTAR SENSORES
 }
 void ERRO_SISTEMA(int SITUACAO_SISTEMA, String ERRO_LOCAL, String ERRO_DESCRICAO) // ACIONA EM CASO DE ALGUM ERRO PARA PROTEGER O SISTEMA
 {
-    BOMBA_ACIONAMENTO(0);
+    myMCP.setPin(4, A, LOW);
+    myMCP.setPin(3, A, HIGH);
+    /*BOMBA_ACIONAMENTO(0);
     SOLOENOIDE_POTAVEL_ACIONAMENTO(1);
-    SOLOENOIDE_REUSO_ACIONAMENTO(0);
+    SOLOENOIDE_REUSO_ACIONAMENTO(0);*/
     ThingSpeak.setStatus("ERRO: " + ERRO_LOCAL + " - VERIFICAR: " + ERRO_DESCRICAO);
     ThingSpeak.writeFields(1, apiWriteKey); // Envia o lote de informações para o servidor
     lcd.clear();
@@ -642,16 +714,79 @@ void ERRO_SISTEMA(int SITUACAO_SISTEMA, String ERRO_LOCAL, String ERRO_DESCRICAO
     }
 }
 
+// acionamento da bomba 1
+void BOMBA_ACIONAMENTO(boolean STATUS_BOMBA_1)
+{
+    if (STATUS_BOMBA_1 == 1 && bombStatus == 0)
+    {
+        digitalWrite(BOMBA_1, HIGH);
+        myMCP.setPin(6, B, LOW); // SSR1
+        bombPower = 1;
+        bombStatus = 1;
+        BOMBA_STATUS = "LIGA";
+    }
+    else
+    {
+        digitalWrite(BOMBA_1, LOW);
+        myMCP.setPin(6, B, HIGH); // SSR1
+        bombPower = 0;
+        bombStatus = 0;
+        BOMBA_STATUS = "DESL";
+    }
+}
+
+// Acionamento solenoide da agua potável
+void SOLOENOIDE_POTAVEL_ACIONAMENTO(boolean STATUS_SOLENOIDE_1)
+{
+    if (STATUS_SOLENOIDE_1 == 1)
+    {
+        digitalWrite(SOLENOIDE_POTAVEL, HIGH);
+        myMCP.setPin(5, B, LOW); // RELE_2
+        potableSolenoidStatus = 1;
+    }
+    else
+    {
+        digitalWrite(SOLENOIDE_POTAVEL, LOW);
+        myMCP.setPin(5, B, HIGH); // RELE_2
+        potableSolenoidStatus = 0;
+    }
+}
+
+// Acionamento solenoide da agua descarte
+void SOLOENOIDE_REUSO_ACIONAMENTO(boolean STATUS_SOLENOIDE_2)
+{
+    if (STATUS_SOLENOIDE_2 == 1)
+    {
+        digitalWrite(SOLENOIDE_DESCARTE, HIGH);
+        myMCP.setPin(4, B, LOW); // RELE_1
+        discardSolenoidStatus = 1;
+    }
+    else
+    {
+        digitalWrite(SOLENOIDE_DESCARTE, LOW);
+        myMCP.setPin(4, B, HIGH); // RELE_1
+        discardSolenoidStatus = 0;
+    }
+}
+
 //------------------------------------------------------------------------------------- Loop infinito do microcontrolador
 void loop()
 {
     DECORRIDOMILLIS = millis();
+    myMCP.setPin(4, A, HIGH);
     digitalWrite(LED_STATUS, LOW);
+    myMCP.setPin(1, A, LOW);
+    if (myMCP.getPin(6, A) == 0)
+    {
+        // RESETA_SERVER();
+        // esp_restart();
+    }
     currentMillis = millis();
     if (currentMillis - previousMillis > interval)
     {
         if (WiFi.status() != WL_CONNECTED)
         {
+            myMCP.setPin(7, A, LOW);
             Serial.println("AGUARDE CONECTANDO...");
             digitalWrite(LED_WIFI, LOW);
             while (WiFi.status() != WL_CONNECTED)
@@ -660,6 +795,7 @@ void loop()
                 delay(5000);
             }
             Serial.println("Conectado.");
+            myMCP.setPin(7, A, HIGH);
             digitalWrite(LED_WIFI, HIGH);
         }
         pulse1Sec = pulseCount; // Recebe a informação do sensor de fluxo
@@ -727,37 +863,56 @@ void loop()
         Serial.print(bombStatus); // Envia para Serial Monitor Status Bomba
 
         // ACIONAMENTO DESCARTE DE AGUA
-        if (levelSensor_1 == 1 && DESCARTE_MAQUINA == 0)
+        if (levelSensor_1 == 1 && DESCARTE_MAQUINA == 4)
         {
             SOLOENOIDE_REUSO_ACIONAMENTO(0);
-            DESCARTE_MAQUINA++;
+            DESCARTE_MAQUINA = 0;
+            Serial.println(DESCARTE_MAQUINA);
+            delay(5000);
         }
         else
         {
             if (levelSensor_1 == 0 && DESCARTE_MAQUINA == 0)
             {
+                DESCARTE_MAQUINA = 1;
                 SOLOENOIDE_REUSO_ACIONAMENTO(0);
-                // DESCARTE_MAQUINA++;
+                Serial.print("  ");
+                Serial.print(DESCARTE_MAQUINA);
+                Serial.print("  ");
+                delay(5000);
             }
             else
             {
                 if (levelSensor_1 == 1 && DESCARTE_MAQUINA == 1)
                 {
                     SOLOENOIDE_REUSO_ACIONAMENTO(1);
-                    DESCARTE_MAQUINA++;
+                    DESCARTE_MAQUINA = 3;
+                    Serial.print("  ");
+                    Serial.print(DESCARTE_MAQUINA);
+                    Serial.print("  ");
+                    delay(5000);
                 }
                 else
                 {
-                    if (levelSensor_1 == 0 && DESCARTE_MAQUINA == 1)
+                    if (levelSensor_1 == 0 && DESCARTE_MAQUINA == 3)
                     {
+                        DESCARTE_MAQUINA = 4;
                         SOLOENOIDE_REUSO_ACIONAMENTO(0);
-                        DESCARTE_MAQUINA++;
+                        Serial.print("  ");
+                        Serial.print(DESCARTE_MAQUINA);
+                        Serial.print("  ");
+                        delay(5000);
                     }
                     else
                     {
-                        if (levelSensor_1 == 0 && DESCARTE_MAQUINA == -1)
+                        if (levelSensor_1 == 0 && DESCARTE_MAQUINA == 1)
                         {
                             DESCARTE_MAQUINA = 1;
+                            SOLOENOIDE_REUSO_ACIONAMENTO(0);
+                            Serial.print("  ");
+                            Serial.print(DESCARTE_MAQUINA);
+                            Serial.print("  ");
+                            delay(5000);
                         }
                     }
                 }
@@ -1067,12 +1222,13 @@ void loop()
             // Carrega a informação do servidor o total acumulado de litros.
             totalLitres = ThingSpeak.readFloatField(1753394, 3, apiReadKey);
         }*/
-        CONTADOR_ATUALIZACAO_SERVER++;
-        digitalWrite(LED_STATUS, HIGH);
-        Serial.print(" | "); // Envia para Serial Monitor a separação
-        Serial.print("TEMPO: ");
-        Serial.print((millis() - DECORRIDOMILLIS)); // Envia para Serial Monitor Tempo decorrido em ms
-        Serial.println("ms");
-        delay(500);
     }
+    CONTADOR_ATUALIZACAO_SERVER++;
+    digitalWrite(LED_STATUS, HIGH);
+    myMCP.setPin(1, A, HIGH);
+    Serial.print(" | "); // Envia para Serial Monitor a separação
+    Serial.print("TEMPO: ");
+    Serial.print((millis() - DECORRIDOMILLIS)); // Envia para Serial Monitor Tempo decorrido em ms
+    Serial.println("ms");
+    delay(500);
 }
