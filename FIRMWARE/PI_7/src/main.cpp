@@ -14,7 +14,7 @@ const char *apiWriteKey = "1OCLPVHNGHJUTZYH"; // Chave de gravação do ThingSpe
 const char *apiReadKey = "3HPJPRL5N7JV1MS3";  // Chave de leitura do ThingSpeak
 const char *ssid = "FALANGE_SUPREMA";         // Nome da rede wifi ssid
 const char *pass = "#kinecs#";                // Senha da rede wifi
-const char *ntpServer = "pool.ntp.org";
+const char *ntpServer = "pool.ntp.org";       // Servidor relogio mundial
 const long gmtOffset_sec = 0;
 const int daylightOffset_sec = -3600 * 3;
 //-----------------------------------------------------------------------------------------------------------  DEFINIÇÕES
@@ -36,31 +36,32 @@ const int daylightOffset_sec = -3600 * 3;
 #define RESET_PIN 4
 #define LED_WIFI 2
 
+
+
+
 //----------------------------------------------------------------------------------------------------- VARIAVEIS GLOBAIS
-long currentMillis = 0;
-long previousMillis = 0;
-long DECORRIDOMILLIS = 0;
-int interval = 1000; // Define o intervalo de leitura em milisegundos
-float calibrationFactor = 4.5;
-volatile byte pulseCount;
-byte pulse1Sec = 0;
-float flowRate;
+
+long currentMillis = 0, previousMillis = 0, DECORRIDOMILLIS = 0;
+
 unsigned long flowMilliLitres;
 unsigned long tempflowMilliLitres;
 unsigned int totalMilliLitres;
-float flowLitres;
-float totalLitres;
-boolean bombStatus = 0;
-boolean potableSolenoidStatus = 0;
-boolean discardSolenoidStatus = 0;
-boolean levelSensor_1 = 0, levelSensor_2 = 0, levelSensor_3 = 0, levelSensor_4 = 0, levelSensor_5 = 0, levelSensor_6 = 0;
-int accumulatorLevel = 0, reservoirLevel = 0, DESCARTE_MAQUINA = 0, CONTADOR_ATUALIZACAO_SERVER = 0, MES_ATUAL, MES_ANTERIOR;
-boolean bombPower = 0;
-boolean statusLed = 0;
-String NUMERO_SERIE = "";
-String NIVEL_ACUMULADOR = "NUL", NIVEL_REUSO = "NUL", BOMBA_STATUS = "NULL";
-String NIVEL_1 = "", NIVEL_2 = "", NIVEL_3 = "", NIVEL_4 = "", NIVEL_5 = "", NIVEL_6 = "", SOLENOIDE_1 = "", SOLENOIDE_2 = "", BOMBA = "";
-boolean BOTAO_STATUS;
+
+volatile byte pulseCount;
+
+float calibrationFactor = 4.5, flowRate, flowLitres, totalLitres;
+
+int accumulatorLevel = 0, reservoirLevel = 0, DESCARTE_MAQUINA = 0, CONTADOR_ATUALIZACAO_SERVER = 0, MES_ATUAL,
+    MES_ANTERIOR, TEMPO_APRESENTA = 3000, interval = 1000;
+
+boolean levelSensor_1 = 0, levelSensor_2 = 0, levelSensor_3 = 0, levelSensor_4 = 0, levelSensor_5 = 0, levelSensor_6 = 0,
+        bombStatus = 0, potableSolenoidStatus = 0, discardSolenoidStatus = 0, bombPower = 0, statusLed = 0, BOTAO_STATUS;
+
+String NIVEL_ACUMULADOR = "NUL", NIVEL_REUSO = "NUL", BOMBA_STATUS = "NULL", NUMERO_SERIE = "", NIVEL_1 = "",
+       NIVEL_2 = "", NIVEL_3 = "", NIVEL_4 = "", NIVEL_5 = "", NIVEL_6 = "", SOLENOIDE_1 = "", SOLENOIDE_2 = "",
+       BOMBA = "";
+
+byte pulse1Sec = 0;
 // SIMBOLOS ESPECIAIS LCD LOGO UNIVESP
 byte SIMB1[8] = {B11100, B01110, B01110, B00111, B00111, B00111, B00011, B00011};
 byte SIMB2[8] = {B01111, B00111, B00011, B00011, B00011, B00001, B00001, B00001};
@@ -146,6 +147,187 @@ void setup()
     lcd.print("..INICIALIZANDO...");
     delay(200);
     // configurar as portas do microcontrolador como entradas de nivel alto
+
+    lcd.clear();
+
+    // CRIA SIMBOLOS NO LCD
+    lcd.createChar(1, SIMB1);
+    lcd.createChar(2, SIMB2);
+    lcd.createChar(3, SIMB3);
+    lcd.createChar(4, SIMB4);
+    lcd.createChar(5, SIMB5);
+    lcd.createChar(6, SIMB6);
+    lcd.createChar(7, SIMB7);
+    lcd.createChar(8, SIMB8);
+
+    byte Count = 1;
+
+    lcd.clear();
+    // MOSTRA NO LCD OS BYTES PARA SIMBOLOS SIMB1, SIMB2, SIMB3...
+    for (byte y = 1; y < 3; y++)
+    {
+        for (byte x = 8; x < 12; x++)
+        {
+            lcd.setCursor(x, y);
+            lcd.write(Count);
+            Count++;
+        }
+    }
+
+    lcd.setCursor(0, 0);
+    lcd.print("UNIVESP");
+    lcd.setCursor(14, 3);
+    lcd.print("4N88");
+    delay(TEMPO_APRESENTA);
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(" A REUTILIZACAO DA ");
+    lcd.setCursor(0, 1);
+    lcd.print(" AGUA DE MAQUINA DE ");
+    lcd.setCursor(0, 2);
+    lcd.print("    LAVAR ROUPAS    ");
+    lcd.setCursor(0, 3);
+    lcd.print("CARREGANDO");
+    delay(TEMPO_APRESENTA);
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(" PROJETO INTEGRADOR ");
+    lcd.setCursor(0, 1);
+    lcd.print("                    ");
+    lcd.setCursor(0, 2);
+    lcd.print("     GRUPO 4N88     ");
+    lcd.setCursor(0, 3);
+    lcd.print("CARREGANDO");
+    lcd.setCursor(10, 3);
+    lcd.write(255);
+    delay(TEMPO_APRESENTA);
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("                    ");
+    lcd.setCursor(0, 1);
+    lcd.print("     INTEGRANTES    ");
+    lcd.setCursor(0, 2);
+    lcd.print("                    ");
+    lcd.setCursor(0, 3);
+    lcd.print("CARREGANDO");
+    lcd.setCursor(11, 3);
+    lcd.write(255);
+    delay(TEMPO_APRESENTA);
+
+    // lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("  ANDRE LUIZ PRADO  ");
+    lcd.setCursor(0, 1);
+    lcd.print("     DOS SANTOS     ");
+    lcd.setCursor(0, 2);
+    lcd.print("     RA: 1822375    ");
+    lcd.setCursor(0, 3);
+    lcd.print("CARREGANDO");
+    lcd.setCursor(12, 3);
+    lcd.write(255);
+    delay(TEMPO_APRESENTA);
+
+    // lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("     DIEGO ALVES    ");
+    lcd.setCursor(0, 1);
+    lcd.print("                    ");
+    lcd.setCursor(0, 2);
+    lcd.print("     RA: 1831936    ");
+    lcd.setCursor(0, 3);
+    lcd.print("CARREGANDO");
+    lcd.setCursor(13, 3);
+    lcd.write(255);
+    delay(TEMPO_APRESENTA);
+
+    // lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("  ELTON SOLIGUETO   ");
+    lcd.setCursor(0, 1);
+    lcd.print("                    ");
+    lcd.setCursor(0, 2);
+    lcd.print("     RA: 1836172    ");
+    lcd.setCursor(0, 3);
+    lcd.print("CARREGANDO");
+    lcd.setCursor(14, 3);
+    lcd.write(255);
+    delay(TEMPO_APRESENTA);
+
+    // lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("   LILIAN ADRIANA   ");
+    lcd.setCursor(0, 1);
+    lcd.print("  GONZALEZ TENORIO  ");
+    lcd.setCursor(0, 2);
+    lcd.print("     RA: 1835883    ");
+    lcd.setCursor(0, 3);
+    lcd.print("CARREGANDO");
+    lcd.setCursor(15, 3);
+    lcd.write(255);
+    delay(TEMPO_APRESENTA);
+
+    // lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("  RODRIGO DE AVILA  ");
+    lcd.setCursor(0, 1);
+    lcd.print("      OLIVEIRA      ");
+    lcd.setCursor(0, 2);
+    lcd.print("     RA: 1826340    ");
+    lcd.setCursor(0, 3);
+    lcd.print("CARREGANDO");
+    lcd.setCursor(16, 3);
+    lcd.write(255);
+    delay(TEMPO_APRESENTA);
+
+    // lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("SERGIO LUIZ BARBOSA");
+    lcd.setCursor(0, 1);
+    lcd.print("                    ");
+    lcd.setCursor(0, 2);
+    lcd.print("     RA: 1826279    ");
+    lcd.setCursor(0, 3);
+    lcd.print("CARREGANDO");
+    lcd.setCursor(17, 3);
+    lcd.write(255);
+    delay(TEMPO_APRESENTA);
+
+    // lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("   VICTOR MAKTURA   ");
+    lcd.setCursor(0, 1);
+    lcd.print("                    ");
+    lcd.setCursor(0, 2);
+    lcd.print("     RA: 1827787    ");
+    lcd.setCursor(0, 3);
+    lcd.print("CARREGANDO");
+    lcd.setCursor(18, 3);
+    lcd.write(255);
+    delay(TEMPO_APRESENTA);
+
+    // lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("     ORIENTADORA    ");
+    lcd.setCursor(0, 1);
+    lcd.print("    THAIS PEREIRA   ");
+    lcd.setCursor(0, 2);
+    lcd.print("      DA SILVA      ");
+    lcd.setCursor(0, 3);
+    lcd.print("CARREGANDO");
+    lcd.setCursor(19, 3);
+    lcd.write(255);
+    delay(TEMPO_APRESENTA);
+
+    lcd.clear();
+
+    pulseCount = 0;
+    flowRate = 0;
+    flowMilliLitres = 0;
+    previousMillis = 0;
+
     Serial.println("SENSOR_FLUXO");
     pinMode(SENSOR_FLUXO, INPUT_PULLUP); // Seta o comportamento da porta do microcontrolador
     Serial.println("SENSOR_NIVEL_1");
@@ -174,16 +356,21 @@ void setup()
     pinMode(BOMBA_1, OUTPUT); // Seta a porta 32 do microcontrolador para bomba como saida
     // Configura as portas do MCP23017
     Serial.println("MCP23017");
-
+    myMCP.Init();
     myMCP.setPortMode(0b11111111, B); // Porta A: todos pinos como OUTPUT
-    myMCP.setPortMode(0b11110111, A); // Porta B: B0 - B3 pinos como OUTPUT, B4-B7 pinos como INPUT
-    myMCP.setAllPins(A, OFF);         // Porta A: todos pinos em LOW
-    myMCP.setAllPins(B, ON);          // Porta B: todos pinos em LOW
+    delay(20);
+    myMCP.setPortMode(0b11110111, A); // Porta B: B0 - B3 / B5 - B7 pinos como OUTPUT, B4 pino como INPUT
+    delay(20);
+    myMCP.setAllPins(A, OFF); // Porta A: todos pinos em LOW
+    delay(20);
+    myMCP.setAllPins(B, ON); // Porta B: todos pinos em LOW
+    delay(20);
 
     // MCP23017 PORT A
     // myMCP.setPin(0, A, LOW);
     // myMCP.setPin(1, A, LOW);
     myMCP.setPin(6, A, INPUT); // BOTÃO RESET
+    delay(20);
     /*BOTAO_STATUS = myMCP.getPin(6, A);
     Serial.println("TESTE BOTAO");
     Serial.println(BOTAO_STATUS, BIN);
@@ -196,34 +383,10 @@ void setup()
     Serial.println("SOLTE BOTAO");
     delay(5000);
     */
-    lcd.clear();
-    lcd.print("EXECULTANDO TESTES");
-    Serial.println("SISTEMA VERMELHO");
-    myMCP.setPin(3, A, HIGH);
-    delay(200);
-    myMCP.setPin(3, A, LOW);
-    delay(200);
-    Serial.println("SISTEMA VERDE");
-    myMCP.setPin(4, A, HIGH);
-    delay(200);
-    Serial.println("WIFI");
-    myMCP.setPin(7, A, HIGH);
-    delay(200);
-    myMCP.setPin(7, A, LOW);
-    delay(100);
-    Serial.println("VIDA");
-    myMCP.setPin(1, A, HIGH);
-    delay(200);
-    myMCP.setPin(1, A, LOW);
-    delay(200);
-    Serial.println("LIGADO");
-    myMCP.setPin(0, A, HIGH);
-    delay(200);
-    myMCP.setPin(0, A, LOW);
-    delay(200);
 
-    myMCP.setPin(0, A, HIGH);
-    myMCP.setPin(1, A, HIGH);
+    delay(20);
+    lcd.print("EXECULTANDO TESTES");
+    delay(20);
     // MCP23017 PORT B
     myMCP.setPin(0, B, LOW); // SSR1
     delay(200);
@@ -257,195 +420,50 @@ void setup()
     delay(200);
     myMCP.setPin(7, B, HIGH);
     delay(200);
+    myMCP.setAllPins(B, ON);
+    delay(200);
+    /*
+        myMCP.setPin(0, B, HIGH); // SSR_1
+        myMCP.setPin(1, B, HIGH); // SSR_2
+        myMCP.setPin(2, B, HIGH); // SSR_3
+        myMCP.setPin(3, B, HIGH); // SSR_4
+        myMCP.setPin(4, B, HIGH); // RELE_4
+        myMCP.setPin(5, B, HIGH); // RELE_3
+        myMCP.setPin(6, B, HIGH); // RELE_2
+        myMCP.setPin(7, B, HIGH); // RELE_1
+    */
 
-    myMCP.setPin(0, B, HIGH); // SSR_1
-    myMCP.setPin(1, B, HIGH); // SSR_2
-    myMCP.setPin(2, B, HIGH); // SSR_3
-    myMCP.setPin(3, B, HIGH); // SSR_4
-    myMCP.setPin(4, B, HIGH); // RELE_4
-    myMCP.setPin(5, B, HIGH); // RELE_3
-    myMCP.setPin(6, B, HIGH); // RELE_2
-    myMCP.setPin(7, B, HIGH); // RELE_1
+    Serial.println("SISTEMA VERMELHO");
+    myMCP.setPin(3, A, HIGH);
+    delay(200);
+    myMCP.setPin(3, A, LOW);
+    delay(200);
+    Serial.println("SISTEMA VERDE");
+    myMCP.setPin(4, A, HIGH);
+    delay(200);
+    Serial.println("WIFI");
+    myMCP.setPin(7, A, HIGH);
+    delay(200);
+    myMCP.setPin(7, A, LOW);
+    delay(100);
+    Serial.println("VIDA");
+    myMCP.setPin(1, A, HIGH);
+    delay(200);
+    myMCP.setPin(1, A, LOW);
+    delay(200);
+    Serial.println("LIGADO");
+    myMCP.setPin(0, A, HIGH);
+    delay(200);
+    myMCP.setPin(0, A, LOW);
+    delay(200);
 
-    // CRIA SIMBOLOS NO LCD
-    lcd.createChar(1, SIMB1);
-    lcd.createChar(2, SIMB2);
-    lcd.createChar(3, SIMB3);
-    lcd.createChar(4, SIMB4);
-    lcd.createChar(5, SIMB5);
-    lcd.createChar(6, SIMB6);
-    lcd.createChar(7, SIMB7);
-    lcd.createChar(8, SIMB8);
-
-    byte Count = 1;
+    myMCP.setPin(0, A, HIGH);
+    delay(200);
+    myMCP.setPin(1, A, HIGH);
+    delay(200);
     lcd.clear();
     lcd.print("SISTEMA OK");
     delay(2000);
-    lcd.clear();
-    // MOSTRA NO LCD OS BYTES PARA SIMBOLOS SIMB1, SIMB2, SIMB3...
-    for (byte y = 1; y < 3; y++)
-    {
-        for (byte x = 8; x < 12; x++)
-        {
-            lcd.setCursor(x, y);
-            lcd.write(Count);
-            Count++;
-        }
-    }
-    lcd.setCursor(0, 0);
-    lcd.print("UNIVESP");
-    lcd.setCursor(14, 3);
-    lcd.print("4N88");
-    delay(5000);
-
-    myMCP.Init();
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print(" A REUTILIZACAO DA ");
-    lcd.setCursor(0, 1);
-    lcd.print(" AGUA DE MAQUINA DE ");
-    lcd.setCursor(0, 2);
-    lcd.print("    LAVAR ROUPAS    ");
-    lcd.setCursor(0, 3);
-    lcd.print("CARREGANDO");
-    delay(3000);
-
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print(" PROJETO INTEGRADOR ");
-    lcd.setCursor(0, 1);
-    lcd.print("");
-    lcd.setCursor(0, 2);
-    lcd.print("     GRUPO 4N88     ");
-    lcd.setCursor(0, 3);
-    lcd.print("CARREGANDO");
-    lcd.setCursor(10, 3);
-    lcd.write(255);
-    delay(3000);
-
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("");
-    lcd.setCursor(0, 1);
-    lcd.print("     INTEGRANTES    ");
-    lcd.setCursor(0, 2);
-    lcd.print("");
-    lcd.setCursor(0, 3);
-    lcd.print("CARREGANDO");
-    lcd.setCursor(11, 3);
-    lcd.write(255);
-    delay(3000);
-
-    // lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("  ANDRE LUIZ PRADO  ");
-    lcd.setCursor(0, 1);
-    lcd.print("     DOS SANTOS     ");
-    lcd.setCursor(0, 2);
-    lcd.print("     RA: 1822375    ");
-    lcd.setCursor(0, 3);
-    lcd.print("CARREGANDO");
-    lcd.setCursor(12, 3);
-    lcd.write(255);
-    delay(3000);
-
-    // lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("     DIEGO ALVES    ");
-    lcd.setCursor(0, 1);
-    lcd.print("     DOS SANTOS     ");
-    lcd.setCursor(0, 2);
-    lcd.print("     RA: 1831936    ");
-    lcd.setCursor(0, 3);
-    lcd.print("CARREGANDO");
-    lcd.setCursor(13, 3);
-    lcd.write(255);
-    delay(3000);
-
-    // lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("  ELTON SOLIGUETO   ");
-    lcd.setCursor(0, 1);
-    lcd.print("");
-    lcd.setCursor(0, 2);
-    lcd.print("     RA: 1836172    ");
-    lcd.setCursor(0, 3);
-    lcd.print("CARREGANDO");
-    lcd.setCursor(14, 3);
-    lcd.write(255);
-    delay(3000);
-
-    // lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("   LILIAN ADRIANA   ");
-    lcd.setCursor(0, 1);
-    lcd.print("  GONZALEZ TENORIO  ");
-    lcd.setCursor(0, 2);
-    lcd.print("     RA: 1835883    ");
-    lcd.setCursor(0, 3);
-    lcd.print("CARREGANDO");
-    lcd.setCursor(15, 3);
-    lcd.write(255);
-    delay(3000);
-
-    // lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("  RODRIGO DE AVILA  ");
-    lcd.setCursor(0, 1);
-    lcd.print("      OLIVEIRA      ");
-    lcd.setCursor(0, 2);
-    lcd.print("     RA: 1826340    ");
-    lcd.setCursor(0, 3);
-    lcd.print("CARREGANDO");
-    lcd.setCursor(16, 3);
-    lcd.write(255);
-    delay(3000);
-
-    // lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("SERGIO LUIZ BARBOSA");
-    lcd.setCursor(0, 1);
-    lcd.print("");
-    lcd.setCursor(0, 2);
-    lcd.print("     RA: 1826279    ");
-    lcd.setCursor(0, 3);
-    lcd.print("CARREGANDO");
-    lcd.setCursor(17, 3);
-    lcd.write(255);
-    delay(3000);
-
-    // lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("   VICTOR MAKTURA   ");
-    lcd.setCursor(0, 1);
-    lcd.print("");
-    lcd.setCursor(0, 2);
-    lcd.print("     RA: 1827787    ");
-    lcd.setCursor(0, 3);
-    lcd.print("CARREGANDO");
-    lcd.setCursor(18, 3);
-    lcd.write(255);
-    delay(3000);
-
-    // lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("     ORIENTADORA    ");
-    lcd.setCursor(0, 1);
-    lcd.print("    THAIS PEREIRA   ");
-    lcd.setCursor(0, 2);
-    lcd.print("      DA SILVA      ");
-    lcd.setCursor(0, 3);
-    lcd.print("CARREGANDO");
-    lcd.setCursor(19, 3);
-    lcd.write(255);
-    delay(3000);
-    lcd.clear();
-
-    pulseCount = 0;
-    flowRate = 0;
-    flowMilliLitres = 0;
-    previousMillis = 0;
-
     /* FAZ A VERIFICAÇÃO SE TEM CONECTIVIDADE COM WIFI CASO TENHA PASSA A FRENTE CASO NÃO FAZ A CONEXÃO COM A REDE
      WIFI PRÉ ESTABELECIDA NA CONSTANTE SSID E PASS.*/
     if (WiFi.status() != WL_CONNECTED)
@@ -778,7 +796,8 @@ void loop()
     myMCP.setPin(1, A, LOW);
     if (myMCP.getPin(6, A) == 0)
     {
-        // RESETA_SERVER();
+        RESETA_SERVER();
+        delay(2000);
         // esp_restart();
     }
     currentMillis = millis();
@@ -794,7 +813,7 @@ void loop()
                 WiFi.begin(ssid, pass);
                 delay(5000);
             }
-            Serial.println("Conectado.");
+            Serial.println("CONECTADO.");
             myMCP.setPin(7, A, HIGH);
             digitalWrite(LED_WIFI, HIGH);
         }
@@ -868,7 +887,7 @@ void loop()
             SOLOENOIDE_REUSO_ACIONAMENTO(0);
             DESCARTE_MAQUINA = 0;
             Serial.println(DESCARTE_MAQUINA);
-            delay(5000);
+            delay(500);
         }
         else
         {
@@ -879,7 +898,7 @@ void loop()
                 Serial.print("  ");
                 Serial.print(DESCARTE_MAQUINA);
                 Serial.print("  ");
-                delay(5000);
+                delay(500);
             }
             else
             {
@@ -890,7 +909,7 @@ void loop()
                     Serial.print("  ");
                     Serial.print(DESCARTE_MAQUINA);
                     Serial.print("  ");
-                    delay(5000);
+                    delay(500);
                 }
                 else
                 {
@@ -901,7 +920,7 @@ void loop()
                         Serial.print("  ");
                         Serial.print(DESCARTE_MAQUINA);
                         Serial.print("  ");
-                        delay(5000);
+                        delay(500);
                     }
                     else
                     {
@@ -912,7 +931,7 @@ void loop()
                             Serial.print("  ");
                             Serial.print(DESCARTE_MAQUINA);
                             Serial.print("  ");
-                            delay(5000);
+                            delay(500);
                         }
                     }
                 }
@@ -1200,7 +1219,7 @@ void loop()
         lcd.setCursor(16, 3);
         lcd.print(BOMBA_STATUS);
 
-        if (CONTADOR_ATUALIZACAO_SERVER == 192)
+        if (CONTADOR_ATUALIZACAO_SERVER == 1) // 3,2 para 1 segundos esta tem que ser do tipo int
         {
             // Carrega as informações para serem enviadas em um lote somente para o servidor
             ThingSpeak.setField(1, float(flowRate));         // Fluxo corrente
